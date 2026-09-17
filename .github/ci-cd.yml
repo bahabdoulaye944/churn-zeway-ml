@@ -1,0 +1,44 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: eu-north-1
+  ECR_REPOSITORY: churn-zeway-ml
+  LAMBDA_FUNCTION_NAME: churn-zeway-predict
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag et push l'image Docker
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker build --provenance=false -t $REGISTRY/$ECR_REPOSITORY:${{ github.sha }} .
+          docker tag $REGISTRY/$ECR_REPOSITORY:${{ github.sha }} $REGISTRY/$ECR_REPOSITORY:latest
+          docker push $REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
+          docker push $REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Mettre à jour la fonction Lambda avec la nouvelle image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          aws lambda update-function-code \
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --image-uri $REGISTRY/$ECR_REPOSITORY:${{ github.sha }}

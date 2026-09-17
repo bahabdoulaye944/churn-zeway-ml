@@ -1,19 +1,40 @@
+"""
+API de scoring churn.
+
+Local :  uvicorn app.main:app --reload
+Lambda : ce même fichier est packagé dans le conteneur Docker, et 'handler'
+         (via Mangum) sert d'entrypoint AWS Lambda.
+"""
 from pathlib import Path
 
 import joblib
 import pandas as pd
-import shap
 from fastapi import FastAPI
+from mangum import Mangum
 from pydantic import BaseModel
-
-#MODEL_PATH = Path(__file__).parent / "models" / "churn_model.joblib"
 
 MODEL_PATH = Path(__file__).parent.parent / "models" / "churn_model.joblib"
 
-app = FastAPI(title="Churn ZeWay - API de scoring")
+app = FastAPI(title="Churn ZeWay — API de scoring")
 
-model = joblib.load(MODEL_PATH)
-explainer = shap.TreeExplainer(model)
+_model = None
+_explainer = None
+
+
+def get_model():
+    """
+    Charge le modèle et crée l'explainer SHAP à la première utilisation
+    seulement (pas au démarrage de la fonction) — import de shap différé
+    ici, car son chargement est lent (compilation JIT via numba) et ne
+    doit pas bloquer des routes qui n'en ont pas besoin, comme /health.
+    """
+    global _model, _explainer
+    if _model is None:
+        import shap
+
+        _model = joblib.load(MODEL_PATH)
+        _explainer = shap.TreeExplainer(_model)
+    return _model, _explainer
 
 
 class ClientFeatures(BaseModel):
@@ -39,6 +60,7 @@ def health():
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(features: ClientFeatures):
+    model, explainer = get_model()
     df = pd.DataFrame([features.dict()])
 
     score = float(model.predict_proba(df)[0][1])
@@ -51,3 +73,4 @@ def predict(features: ClientFeatures):
     return PredictionResponse(risk_score=round(score, 3), top_factors=top_factors)
 
 
+handler = Mangum(app)
