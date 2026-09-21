@@ -1,0 +1,30 @@
+name: Monitoring drift hebdomadaire
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # chaque lundi à 6h UTC
+  workflow_dispatch: {}     # permet de le lancer manuellement depuis GitHub
+
+jobs:
+  drift-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+      - run: pip install evidently
+
+      - name: Générer les rapports de drift
+        run: python monitoring.py
+
+      - name: Sauvegarder les rapports comme artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-reports
+          path: |
+            monitoring_report_reference.html
+            monitoring_report_fake_drift.html
