@@ -1,9 +1,7 @@
 name: Monitoring drift hebdomadaire
 
 on:
-  schedule:
-    - cron: "0 6 * * 1"   # chaque lundi à 6h UTC
-  workflow_dispatch: {}     # permet de le lancer manuellement depuis GitHub
+  workflow_dispatch: {}     # déclenchement manuel uniquement
 
 jobs:
   drift-report:

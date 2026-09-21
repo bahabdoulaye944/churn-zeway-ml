@@ -5,6 +5,7 @@ via Evidently AI.
 
 Lancer : python monitoring.py
 """
+import numpy as np
 import pandas as pd
 from evidently import Report
 from evidently.presets import DataDriftPreset
@@ -28,7 +29,6 @@ def generate_fake_drifted_data(n=500):
     des données d'entraînement, pour vérifier que le monitoring
     détecte bien un vrai changement quand il y en a un.
     """
-    import numpy as np
     np.random.seed(42)
 
     fake = pd.DataFrame({
@@ -42,6 +42,7 @@ def generate_fake_drifted_data(n=500):
         "panne_resolue_lentement": np.random.choice([0, 1], n, p=[0.1, 0.9]),
     })
     return fake
+
 
 if __name__ == "__main__":
     generate_report(reference_data, "monitoring_report_reference")
