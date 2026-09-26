@@ -5,6 +5,8 @@ via Evidently AI.
 
 Lancer : python monitoring.py
 """
+from pathlib import Path
+
 import boto3
 import numpy as np
 import pandas as pd
@@ -66,6 +68,15 @@ def generate_fake_drifted_data(n=500):
     return fake
 
 
+def check_drift_detected(html_path: str) -> bool:
+    """
+    Lit le rapport HTML généré et vérifie si Evidently a détecté un
+    drift significatif (plus de 50% des colonnes en dérive, seuil par défaut).
+    """
+    content = Path(html_path).read_text(encoding="utf-8")
+    return "Dataset Drift is detected." in content
+
+
 if __name__ == "__main__":
     generate_report(reference_data, "monitoring_report_reference")
 
@@ -73,11 +84,20 @@ if __name__ == "__main__":
     generate_report(fake_data, "monitoring_report_fake_drift")
 
     real_data = load_real_predictions()
+    drift_on_real_data = False
+
     if len(real_data) >= 10:
         generate_report(real_data, "monitoring_report_real")
+        drift_on_real_data = check_drift_detected("monitoring_report_real.html")
         print(f"{len(real_data)} vraies requêtes analysées")
+        print(f"Drift détecté sur données réelles : {drift_on_real_data}")
     else:
         print(
             f"Seulement {len(real_data)} requête(s) réelle(s) enregistrée(s) — "
             "au moins 10 recommandées pour un rapport significatif"
         )
+
+    # Écrit le statut pour que le workflow GitHub Actions puisse décider
+    # de déclencher ou non un réentraînement automatique
+    with open("drift_status_real.txt", "w") as f:
+        f.write("DRIFT_DETECTED" if drift_on_real_data else "NO_DRIFT")

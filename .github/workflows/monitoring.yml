@@ -3,6 +3,10 @@ name: Monitoring drift hebdomadaire
 on:
   workflow_dispatch: {}
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   drift-report:
     runs-on: ubuntu-latest
@@ -35,3 +39,15 @@ jobs:
             monitoring_report_fake_drift.html
             monitoring_report_real.html
         if: always()
+
+      - name: Déclencher un réentraînement si drift détecté
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f drift_status_real.txt ] && grep -q "DRIFT_DETECTED" drift_status_real.txt; then
+            echo "Drift détecté sur les données réelles — déclenchement du pipeline CI/CD"
+            gh workflow run ci-cd.yml --ref main
+          else
+            echo "Pas de drift significatif (ou pas assez de données) — aucune action"
+          fi
