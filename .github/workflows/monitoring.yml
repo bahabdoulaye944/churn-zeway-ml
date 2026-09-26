@@ -1,7 +1,7 @@
 name: Monitoring drift hebdomadaire
 
 on:
-  workflow_dispatch: {}     # déclenchement manuel uniquement
+  workflow_dispatch: {}
 
 jobs:
   drift-report:
@@ -16,6 +16,13 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pip install evidently
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
+
       - name: Générer les rapports de drift
         run: python monitoring.py
 
@@ -26,3 +33,5 @@ jobs:
           path: |
             monitoring_report_reference.html
             monitoring_report_fake_drift.html
+            monitoring_report_real.html
+        if: always()
