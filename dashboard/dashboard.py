@@ -1,3 +1,5 @@
+import time
+
 import requests
 import streamlit as st
 
@@ -8,7 +10,6 @@ st.set_page_config(page_title="Suivi résiliation clients", layout="wide")
 st.title("📊 Suivi des clients à risque de résiliation")
 st.caption("Prédiction basée sur le modèle churn — scores mis à jour en temps réel")
 
-# Quelques clients types pour la démo (à remplacer plus tard par une vraie liste)
 clients_demo = [
     {"nom": "Client A", "usage_frequency_30d": 1, "usage_trend_pct": 0.3, "incidents_recents": 0,
      "retard_paiement": 0, "tickets_sav_30d": 4, "exposition_marketing": 1,
@@ -32,29 +33,54 @@ FACTOR_LABELS = {
     "panne_resolue_lentement": "Panne résolue lentement",
 }
 
-results = []
-errors = []
 
-with st.spinner("Calcul des scores en cours..."):
-    for client in clients_demo:
-        payload = {k: v for k, v in client.items() if k != "nom"}
+def call_predict_with_retry(payload, max_attempts=2):
+    """
+    Le premier appel après une période d'inactivité peut dépasser la
+    limite de 29s d'API Gateway (cold start Lambda). On retente une
+    fois — l'appel suivant est généralement rapide, la fonction restant
+    "chaude" après ce premier essai.
+    """
+    last_response = None
+    for attempt in range(max_attempts):
         try:
             response = requests.post(
                 API_URL, json=payload, headers={"X-API-Key": API_KEY}, timeout=60
             )
             if response.status_code == 200:
-                data = response.json()
-                results.append({
-                    "Client": client["nom"],
-                    "Score de risque": data["risk_score"],
-                    "Facteurs principaux": ", ".join(
-                        FACTOR_LABELS.get(f, f) for f in data["top_factors"].keys()
-                    ),
-                })
-            else:
-                errors.append(f"{client['nom']} : erreur HTTP {response.status_code} — {response.text}")
+                return response, None
+            last_response = response
+            if response.status_code == 503 and attempt < max_attempts - 1:
+                time.sleep(2)
+                continue
+            return None, f"erreur HTTP {response.status_code} — {response.text}"
         except Exception as e:
-            errors.append(f"{client['nom']} : exception — {e}")
+            last_response = None
+            if attempt < max_attempts - 1:
+                time.sleep(2)
+                continue
+            return None, f"exception — {e}"
+    return None, f"erreur HTTP {last_response.status_code}" if last_response else "échec inconnu"
+
+
+results = []
+errors = []
+
+with st.spinner("Calcul des scores en cours... (le premier appel peut prendre jusqu'à 30s)"):
+    for client in clients_demo:
+        payload = {k: v for k, v in client.items() if k != "nom"}
+        response, error = call_predict_with_retry(payload)
+        if response is not None:
+            data = response.json()
+            results.append({
+                "Client": client["nom"],
+                "Score de risque": data["risk_score"],
+                "Facteurs principaux": ", ".join(
+                    FACTOR_LABELS.get(f, f) for f in data["top_factors"].keys()
+                ),
+            })
+        else:
+            errors.append(f"{client['nom']} : {error}")
 
 for err in errors:
     st.error(err)
