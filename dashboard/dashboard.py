@@ -2,6 +2,7 @@ import requests
 import streamlit as st
 
 API_URL = "https://ba8n0asdl8.execute-api.eu-north-1.amazonaws.com/predict"
+API_KEY = st.secrets["API_KEY"]
 
 st.set_page_config(page_title="Suivi résiliation clients", layout="wide")
 st.title("📊 Suivi des clients à risque de résiliation")
@@ -38,7 +39,9 @@ with st.spinner("Calcul des scores en cours..."):
     for client in clients_demo:
         payload = {k: v for k, v in client.items() if k != "nom"}
         try:
-            response = requests.post(API_URL, json=payload, timeout=60)
+            response = requests.post(
+                API_URL, json=payload, headers={"X-API-Key": API_KEY}, timeout=60
+            )
             if response.status_code == 200:
                 data = response.json()
                 results.append({
