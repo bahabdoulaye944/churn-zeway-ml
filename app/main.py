@@ -5,11 +5,12 @@ Local :  uvicorn app.main:app --reload
 Lambda : ce même fichier est packagé dans le conteneur Docker, et 'handler'
          (via Mangum) sert d'entrypoint AWS Lambda.
 """
+import os
 from pathlib import Path
 
 import joblib
 import pandas as pd
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException
 from mangum import Mangum
 from pydantic import BaseModel
 
@@ -22,12 +23,6 @@ _explainer = None
 
 
 def get_model():
-    """
-    Charge le modèle et crée l'explainer SHAP à la première utilisation
-    seulement (pas au démarrage de la fonction) — import de shap différé
-    ici, car son chargement est lent (compilation JIT via numba) et ne
-    doit pas bloquer des routes qui n'en ont pas besoin, comme /health.
-    """
     global _model, _explainer
     if _model is None:
         import shap
@@ -35,6 +30,18 @@ def get_model():
         _model = joblib.load(MODEL_PATH)
         _explainer = shap.TreeExplainer(_model)
     return _model, _explainer
+
+
+def verify_api_key(x_api_key: str = Header(None)):
+    """
+    Vérification au niveau applicatif (les clés natives d'API Gateway ne
+    sont pas disponibles sur une HTTP API, seulement sur REST API).
+    Le secret attendu est stocké en variable d'environnement Lambda,
+    jamais en dur dans le code.
+    """
+    expected = os.environ.get("API_SECRET_KEY")
+    if not expected or x_api_key != expected:
+        raise HTTPException(status_code=403, detail="Clé API manquante ou invalide")
 
 
 class ClientFeatures(BaseModel):
@@ -59,7 +66,7 @@ def health():
 
 
 @app.post("/predict", response_model=PredictionResponse)
-def predict(features: ClientFeatures):
+def predict(features: ClientFeatures, _: None = Depends(verify_api_key)):
     model, explainer = get_model()
     df = pd.DataFrame([features.dict()])
 
