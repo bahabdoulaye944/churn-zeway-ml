@@ -26,3 +26,22 @@ app/ API FastAPI (/predict)
 src/ Chargement des données, feature engineering, entraînement
 notebooks/ Exploration initiale (EDA, tests de features)
 models/ Modèle entraîné (non versionné, voir .gitignore)
+
+
+## Lancer en local
+
+```bash
+python -m venv venv
+venv\Scripts\activate       # Windows
+pip install -r requirements.txt
+
+python -m src.train          # Entraîne et sauvegarde le modèle
+uvicorn app.main:app --reload   # Lance l'API sur http://localhost:8000/docs
+```
+
+## Résultats
+
+| Modèle | AUC (test) | Precision (Churn) | Recall (Churn) |
+|---|---|---|---|
+| Régression logistique | 0.831 | 0.50 | 0.79 |
+| XGBoost | 0.835 | 0.51 | 0.79 |

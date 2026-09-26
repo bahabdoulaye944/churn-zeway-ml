@@ -10,10 +10,33 @@ env:
   LAMBDA_FUNCTION_NAME: churn-zeway-predict
 
 jobs:
-  build-and-deploy:
+  train:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Entraîner le modèle (échoue si sous le seuil de performance)
+        run: python -m src.train
+      - name: Sauvegarder le modèle comme artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-model
+          path: models/churn_model.joblib
+
+  build-and-deploy:
+    needs: train
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Récupérer le modèle entraîné
+        uses: actions/download-artifact@v4
+        with:
+          name: trained-model
+          path: models/
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
